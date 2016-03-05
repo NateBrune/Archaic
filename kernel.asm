@@ -1,7 +1,14 @@
 :entry
     JSR device_discovery  
     JSR init_vram          ; Setup LEM
-    SET PUSH, mon_str
+    SET PUSH, 0x8800
+    JSR paint_bg
+    SET PUSH, 0x7800       ; How to BOR the string
+    SET PUSH, [op_arg_magic]       ; Says that there is an optional argument
+    SET PUSH, MainMenu_Welcome_str
+    SET PUSH, 0x7800dd       ; How to BOR the string
+    SET PUSH, [op_arg_magic]       ; Says that there is an optional argument
+    SET PUSH, MainMenu_Welcome_str
     JSR print_str
     SUB PC, 1
 :init_vram
@@ -15,22 +22,60 @@
     HWI, POP
     SET B, POP
     SET PC, POP
+
+; Prints string directly to the screen, no new line
+; Z+2 = BOR Z+0, Z+2  ; color 
+; Z+1 = Optional argument magic
+; ^ Optional ^
+; Z+0 = Pointer to string
 :print_str
     SET PUSH, Z
     SET Z, SP
+    ADD Z, 2
+    SET PUSH, J
     SET PUSH, I
     SET I, [vram]
-    SET PUSH, J
-    SET J, [Z+2]
+    SET J, [Z+0]
+    IFE [Z+1], [op_arg_magic]
+    SET PC, printloopcolor
 
-:printloop
+:printloopdefault
     IFE [J], 0
-    SET PC, EndLoop
-    BOR [J], 0xf000
+    SET PC, .EndPrintLoop
+    BOR [J], [system_colors]
     STI, [I], [J]
-    SET PC, printloop
-:EndLoop ;finished
+    SET PC, printloopdefault
+:printloopcolor
+    IFE [J], 0
+    SET PC, .EndPrintLoop
+    BOR [J], [Z+2]
+    STI, [I], [J]
+    SET PC, printloopcolor
+:.EndPrintLoop ;finished
+    SET I, POP
     SET J, POP
+    SET Z, POP
+    SET PC, POP
+
+; Prints string directly to the screen, no new line
+; Z+0 = Paint color
+:paint_bg
+    SET PUSH, Z
+    SET Z, SP
+    ADD Z, 2
+    SET PUSH, I
+    SET I, [vram]
+    SET PUSH, X
+    SET X, [vram]
+    ADD X, 0x0180             ; 0x0180 is the full length of the screen
+
+:paintloop
+    IFE I, X                  ; If we reached the end of the buffer
+    SET PC, .EndPaintLoop
+    STI, [I], [Z+0]
+    SET PC, paintloop
+:.EndPaintLoop ;finished
+    SET X, POP
     SET I, POP
     SET Z, POP
     SET PC, POP
@@ -109,20 +154,26 @@
 
 ; 35 bytes each
 :known_devices
-	DAT 0xf615, 0x7349, 0 ;"  X. LEM-1802 Monitor           ", 0
-	DAT 0x7406, 0x30cf, 0 ;"  X. Generic Keyboard           ", 0
-	DAT 0xb402, 0x12d0, 0 ;"  X. Generic Clock              ", 0
-	DAT 0x4cae, 0x74fa, 0 ;"  X. HMD2043 Harold Media Drive ", 0
-	DAT 0xbf3c, 0x42ba, 0 ;"  X. SPED3 Display              ", 0
+    DAT 0xf615, 0x7349, 0 ;"  X. LEM-1802 Monitor           ", 0
+    DAT 0x7406, 0x30cf, 0 ;"  X. Generic Keyboard           ", 0
+    DAT 0xb402, 0x12d0, 0 ;"  X. Generic Clock              ", 0
+    DAT 0x4cae, 0x74fa, 0 ;"  X. HMD2043 Harold Media Drive ", 0
+    DAT 0xbf3c, 0x42ba, 0 ;"  X. SPED3 Display              ", 0
 
 :known_device_count
-	DAT 5
+    DAT 5
 
 :discovered_devices
-	DAT 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
+    DAT 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 
 
 :vram
-	DAT 0x5000
-:mon_str
-	DAT "Hello World!" 0
+    DAT 0x5000
+:op_arg_magic
+    DAT 0x4545;
+:system_colors
+    DAT 0xf000
+:UI_Bar
+    DAT "                              ", 0
+:MainMenu_Welcome_str
+    DAT "     Welcome to Archaic!      ", 0
 
